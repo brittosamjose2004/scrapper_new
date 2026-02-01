@@ -191,6 +191,7 @@ def main():
             # Force unified folder based on user query
             # NEW: Subfolder for source
             match_folder = os.path.join(download_base, "annualreports.com", sanitize_filename(company_query))
+            print(f"  [Debug] Target Folder: {os.path.abspath(match_folder)}")
             if not os.path.exists(match_folder):
                 os.makedirs(match_folder)
             
@@ -225,6 +226,7 @@ def main():
             # Force unified folder based on user query
             # NEW: Subfolder for source
             match_folder = os.path.join(download_base, "nseindia.com", sanitize_filename(company_query))
+            print(f"  [Debug] Target Folder: {os.path.abspath(match_folder)}")
             if not os.path.exists(match_folder):
                 os.makedirs(match_folder)
             
