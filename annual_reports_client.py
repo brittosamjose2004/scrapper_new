@@ -2,52 +2,77 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
+import time
+import random
 
 class AnnualReportsClient:
     BASE_URL = "https://www.annualreports.com"
-    SEARCH_URL = "https://www.annualreports.com/Companies"
 
     def __init__(self):
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Referer": "https://www.annualreports.com/",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
         }
+        self.session = requests.Session()
+        self.session.headers.update(self.headers)
+
+    def _request_with_retry(self, url, timeout=30, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                # Polite delay
+                time.sleep(random.uniform(1.0, 3.0))
+                
+                response = self.session.get(url, timeout=timeout)
+                
+                if response.status_code == 429:
+                    wait_time = (2 ** attempt) * 5
+                    print(f"  [Rate Limit] Sleeping {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                elif response.status_code >= 500:
+                    print(f"  [Server Error] {response.status_code}. Retrying...")
+                    time.sleep(2)
+                    continue
+                    
+                return response
+            except requests.RequestException as e:
+                print(f"  [Network Error] {e}")
+                time.sleep(2)
+        return None
 
     def search_company(self, query):
         """
-        Search for a company and return its details (name, url).
+        Search for a company on annualreports.com
+        Returns a list of dicts: {'name': 'Company Name', 'url': '/Company/company-name'}
         """
-        print(f"Searching annualreports.com for '{query}'...")
-        params = {'search': query}
+        search_url = f"{self.BASE_URL}/filter?q={query}"
         try:
-            response = requests.get(self.SEARCH_URL, params=params, headers=self.headers)
+            print(f"Searching annualreports.com for '{query}'...")
+            response = self._request_with_retry(search_url, timeout=20)
+            if not response:
+                return []
+                
             response.raise_for_status()
             
-            # If redirected directly to company page
-            if "/Company/" in response.url:
-                return [{"name": query, "url": response.url}]
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-            results = []
-            
-            # This selector depends on the actual search result page structure
-            # Based on exploration, it seems to list companies.
-            # We'll look for links containing /Company/
-            links = soup.find_all('a', href=re.compile(r"/Company/"))
-            
-            seen_urls = set()
-            for link in links:
-                url = link['href']
-                if not url.startswith("http"):
-                    url = self.BASE_URL + url
+            # They might return JSON or HTML depending on endpoint
+            # Actually /filter returns a JSON list usually for autocomplete
+            # Let's check response type
+            try:
+                data = response.json()
+                # data structure: [{"label":"Reliance Industries Limited","value":"/Company/reliance-industries-limited"}]
+                results = []
+                for item in data:
+                    results.append({
+                        "name": item.get("label"),
+                        "url": self.BASE_URL + item.get("value")
+                    })
+                return results
+            except ValueError:
+                print(f"Error parsing JSON from search: {response.text[:100]}")
+                return []
                 
-                name = link.text.strip()
-                if url not in seen_urls and name:
-                    results.append({"name": name, "url": url})
-                    seen_urls.add(url)
-            
-            return results
-
-        except requests.RequestException as e:
+        except Exception as e:
             print(f"Error searching annualreports.com: {e}")
             return []
 
@@ -58,18 +83,18 @@ class AnnualReportsClient:
         """
         print(f"Fetching reports from {company_url}...")
         try:
-            response = requests.get(company_url, headers=self.headers)
+            response = self._request_with_retry(company_url, timeout=20)
+            if not response:
+                return []
+                
             response.raise_for_status()
             
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.content, 'html.parser')
             reports = []
             
             # Locate the section containing reports. 
             # Usually strict structure: Year -> Link
             # Heuristic: Find links ending in .pdf or containing "View Annual Report"
-            
-            # Typically structure might be hidden in divs.
-            # We will look for all 'a' tags that look like reports.
             
             links = soup.find_all('a', href=True)
             for link in links:
@@ -78,9 +103,6 @@ class AnnualReportsClient:
                 
                 # Filter for PDF links
                 if '.pdf' in href.lower() or 'download' in text.lower():
-                    # Debug: print text and href
-                    # print(f"Analyzing: Text='{text}', Href='{href}'")
-                    
                     # Try to extract year from text or common patterns
                     # Often text is "2023 Annual Report"
                     # Regex: Look for 19xx or 20xx. 
@@ -91,12 +113,6 @@ class AnnualReportsClient:
                     
                     year = year_match.group(0) if year_match else "Unknown"
                     
-                    # If unknown, try to look at the previous sibling?? 
-                    # Sometimes the year is in a separate column. 
-                    # But for now let's just log if unknown.
-                    if year == "Unknown":
-                        print(f"  [Warning] Could not extract year from: Text='{text}', Href='{href}'")
-
                     if not href.startswith("http"):
                         href = self.BASE_URL + href
                         

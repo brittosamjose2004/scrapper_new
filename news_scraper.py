@@ -144,13 +144,24 @@ class NewsScraper:
         url = f"https://www.reddit.com/search.json?q={quote(company)}&sort=new&limit={limit}"
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Script/1.0"
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate"
         }
         
         try:
+            # Add delay to be respectful to Reddit
+            time.sleep(random.uniform(1.0, 2.0))
             response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 429:
+            
+            if response.status_code == 403:
+                print("  [Warning] Reddit blocked this request (403). This is likely due to Reddit's API restrictions. Skipping.")
+                return []
+            elif response.status_code == 429:
                 print("  [Warning] Reddit rate limited (429). Skipping.")
+                return []
+            elif response.status_code != 200:
+                print(f"  [Warning] Reddit returned status {response.status_code}. Skipping.")
                 return []
                 
             response.raise_for_status()

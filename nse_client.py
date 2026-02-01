@@ -1,5 +1,6 @@
 import requests
 import time
+import random
 import re
 import json
 import os
@@ -26,6 +27,31 @@ class NSEClient:
         self.session = requests.Session()
         self.session.headers.update(self.HEADERS)
         self._initialized = False
+
+    def _request_with_retry(self, url, method="GET", headers=None, timeout=30, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                # Polite delay
+                time.sleep(random.uniform(1.0, 3.0))
+                
+                response = self.session.request(method, url, headers=headers, timeout=timeout)
+                
+                if response.status_code == 429:
+                    wait_time = (2 ** attempt) * 5
+                    print(f"  [NSE Rate Limit] Sleeping {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                elif response.status_code >= 500:
+                    print(f"  [NSE Server Error] {response.status_code}. Retrying...")
+                    time.sleep(2)
+                    continue
+                    
+                return response
+            except requests.RequestException as e:
+                print(f"  [NSE Network Error] {e}")
+                time.sleep(2)
+        
+        return None
 
     def _ensure_session(self):
         if not self._initialized:
@@ -57,9 +83,10 @@ class NSEClient:
         
         try:
             print(f"Searching NSE for '{query}'...")
-            response = self.session.get(search_url, headers=api_headers, timeout=10)
+            # response = self.session.get(search_url, headers=api_headers, timeout=10)
+            response = self._request_with_retry(search_url, headers=api_headers, timeout=15)
             
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 try:
                     data = response.json()
                     results = []
@@ -114,10 +141,11 @@ class NSEClient:
 
         try:
             print(f"Fetching annual reports for {symbol}...")
-            response = self.session.get(api_url, headers=api_headers, timeout=15)
+            # response = self.session.get(api_url, headers=api_headers, timeout=15)
+            response = self._request_with_retry(api_url, headers=api_headers, timeout=20)
             
             reports = []
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 data = response.json()
                 # Data structure usually: { data: [ { 'companyName': ..., 'fileName': ..., 'fromYr': ... } ] }
                 # Let's inspect data structure in real execution if possible, but for now write defensive parsing
@@ -169,10 +197,11 @@ class NSEClient:
 
         try:
             print(f"Fetching BRSR reports for {symbol}...")
-            response = self.session.get(api_url, headers=api_headers, timeout=15)
+            # response = self.session.get(api_url, headers=api_headers, timeout=15)
+            response = self._request_with_retry(api_url, headers=api_headers, timeout=20)
             
             reports = []
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 data = response.json()
                 rows = data.get('data', [])
                 for row in rows:
@@ -241,6 +270,12 @@ class NSEScraper:
             print(f"NSEScraper BRSR Error: {e}")
 
     def _download_files(self, reports, symbol, prefix):
+        # We can re-use the robust download_file from scraper.py if we import it, 
+        # or implement similar logic here. Since scraper.py imports THIS file, 
+        # importing scraper.py here would cause circular import.
+        # So we duplicate the robust logic or move it to a utils file.
+        # For safety in this session, I'll inline the robust logic here slightly simplified.
+        
         for report in reports:
             year = report['year']
             url = report['url']
@@ -253,15 +288,34 @@ class NSEScraper:
                 continue
             
             print(f"Downloading {filename} from {url}...")
-            try:
-                # Need headers for download usually
-                r = self.client.session.get(url, stream=True, timeout=30)
-                if r.status_code == 200:
-                    with open(filepath, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    print(f"Downloaded {filepath}")
-                else:
-                    print(f"Failed to download {url}, Status: {r.status_code}")
-            except Exception as e:
-                print(f"Download error {url}: {e}")
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    time.sleep(random.uniform(1.0, 3.0))
+                    
+                    r = self.client.session.get(url, stream=True, timeout=60)
+                    
+                    if r.status_code == 429:
+                        wait_time = (2 ** attempt) * 5
+                        print(f"  [Rate Limit] Sleeping {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                        
+                    if r.status_code == 200:
+                        with open(filepath, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        print(f"Downloaded {filepath}")
+                        break # Success
+                    else:
+                        print(f"Failed to download {url}, Status: {r.status_code}")
+                        if r.status_code >= 500:
+                            time.sleep(2)
+                            continue
+                        break # Non-retryable error
+                        
+                except Exception as e:
+                    print(f"Download error {url}: {e}")
+                    time.sleep(2)
+            else:
+                print(f"Failed to download {filename} after retries.")
