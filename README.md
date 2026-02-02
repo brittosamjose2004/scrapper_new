@@ -1,4 +1,4 @@
-python scraper.py --company "Reliance Industries" --modal-url "YOUR_NEW_MODAL_URL"
+python scraper.py --company "company name" --modal-url "YOUR_NEW_MODAL_URL"
 
 deploy the modal_app.py in modal.com 
 by using :
