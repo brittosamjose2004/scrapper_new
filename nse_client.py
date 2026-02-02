@@ -184,48 +184,81 @@ class NSEClient:
 
     def get_brsr_reports(self, symbol):
         """
-        Get BRSR (Business Responsibility and Sustainability Reports) for a specific symbol.
+        Get standalone BRSR (Business Responsibility and Sustainability Reports) for a specific symbol.
+        
+        Note: Some companies file STANDALONE BRSR reports separately from their Annual Reports.
+        This function fetches actual BRSR PDF and XBRL files from the corporate announcements API.
+        
+        BRSR filings are found in the corporate-announcements endpoint with:
+        - Description: "Updates"
+        - Text contains: "BUSINESS RESPONSIBILITY" or "BRSR"
+        
+        These are separate from embedded BRSR sections in Annual Reports.
         """
         self._ensure_session()
-        api_url = f"https://www.nseindia.com/api/annual-reports?index=equities&symbol={quote(symbol)}"
+        api_url = f"https://www.nseindia.com/api/corporate-announcements?index=equities&symbol={quote(symbol)}"
         
         api_headers = {
             "Accept": "*/*",
-            "Referer": f"https://www.nseindia.com/companies-listing/corporate-filings-annual-reports?symbol={symbol}&tabIndex=equity",
+            "Referer": f"https://www.nseindia.com/companies-listing/corporate-filings-bussiness-sustainabilitiy-reports?symbol={symbol}",
             "X-Requested-With": "XMLHttpRequest"
         }
 
         try:
-            print(f"Fetching BRSR reports for {symbol}...")
-            # response = self.session.get(api_url, headers=api_headers, timeout=15)
+            print(f"Fetching standalone BRSR reports for {symbol}...")
             response = self._request_with_retry(api_url, headers=api_headers, timeout=20)
             
             reports = []
             if response and response.status_code == 200:
                 data = response.json()
-                rows = data.get('data', [])
-                for row in rows:
-                    filename = row.get('fileName')
-                    year = row.get('fromYr')
+                
+                # Filter for BRSR-related announcements
+                brsr_keywords = ['brsr', 'business responsibility', 'sustainability report', 'bsr']
+                
+                for item in data:
+                    desc = item.get('desc', '').lower()
+                    text = item.get('attchmntText', '').lower()
                     
-                    if filename:
-                        is_brsr = 'brsr' in filename.lower() or 'business' in filename.lower()
+                    # Check if this is a BRSR filing
+                    if any(keyword in desc or keyword in text for keyword in brsr_keywords):
+                        file_url = item.get('attchmntFile')
+                        date_str = item.get('an_dt', '')
+                        file_size = item.get('fileSize', 'Unknown')
+                        has_xbrl = item.get('hasXbrl', False)
                         
-                        if filename.startswith('http'):
-                            url = filename
-                        else:
-                            url = f"https://nsearchives.nseindia.com/annual_reports/{filename}"
-                        
-                        if is_brsr:
-                             reports.append({
-                                "year": year,
-                                "url": url,
-                                "description": f"BRSR {year} - {filename}"
-                            })
+                        if file_url:
+                            # Extract year from date (format: "06-Sep-2025 17:31:24")
+                            year = None
+                            if date_str:
+                                try:
+                                    # Extract year from date string
+                                    parts = date_str.split('-')
+                                    if len(parts) >= 3:
+                                        year = parts[2].split()[0]  # "2025 17:31:24" -> "2025"
+                                except:
+                                    pass
+                            
+                            report_info = {
+                                "year": year or "Unknown",
+                                "url": file_url,
+                                "description": f"BRSR Report - {date_str}",
+                                "size": file_size,
+                                "has_xbrl": has_xbrl,
+                                "date": date_str
+                            }
+                            reports.append(report_info)
+                            
+            if reports:
+                print(f"  Found {len(reports)} standalone BRSR reports")
+                # Sort by date (most recent first)
+                reports.sort(key=lambda x: x.get('date', ''), reverse=True)
+            else:
+                print(f"  No standalone BRSR reports found. Company may file BRSR embedded in Annual Reports.")
+            
             return reports
 
         except Exception as e:
-            print(f"Error fetching NSE BRSR reports: {e}")
+            print(f"Error fetching standalone BRSR reports: {e}")
             return []
 
 

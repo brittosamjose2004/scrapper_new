@@ -130,28 +130,38 @@ ANSWER:"""
             logger.error(f"Directory not found: {company_dir}")
             return
 
-        for fname in os.listdir(company_dir):
-            if fname.lower().endswith(".pdf"):
-                logger.info(f"Processing Report: {fname}")
-                pdf_path = os.path.join(company_dir, fname)
-                
-                # 1. Extract Text
-                pages_text = extract_text_from_pdf(pdf_path)
-                if not pages_text:
-                    continue
+        # Process all PDF reports in the directory
+        pdf_files = [f for f in os.listdir(company_dir) if f.lower().endswith(".pdf")]
+        
+        if not pdf_files:
+            logger.warning(f"No PDF files found in {company_dir}")
+            return
+        
+        logger.info(f"Found {len(pdf_files)} PDF report(s) to process")
 
-                # 2. Clone Template
-                report_data = json.loads(json.dumps(self.questions)) # Deep copy
+        for fname in pdf_files:
+            logger.info(f"Processing Report: {fname}")
+            pdf_path = os.path.join(company_dir, fname)
+            
+            # 1. Extract Text
+            pages_text = extract_text_from_pdf(pdf_path)
+            if not pages_text:
+                logger.warning(f"No text extracted from {fname}")
+                continue
 
-                # 3. Answer Questions
-                self.traverse_and_answer(report_data, pages_text)
+            # 2. Clone Template
+            report_data = json.loads(json.dumps(self.questions)) # Deep copy
 
-                # 4. Save Result
-                out_name = fname.replace(".pdf", "_BRSR_Extracted.json")
-                out_path = os.path.join(company_dir, out_name)
-                with open(out_path, 'w', encoding='utf-8') as f:
-                    json.dump(report_data, f, indent=4)
-                logger.info(f"Saved extraction to {out_path}")
+            # 3. Answer Questions
+            logger.info(f"Analyzing {len(pages_text)} pages with LLM...")
+            self.traverse_and_answer(report_data, pages_text)
+
+            # 4. Save Result
+            out_name = fname.replace(".pdf", "_BRSR_Extracted.json")
+            out_path = os.path.join(company_dir, out_name)
+            with open(out_path, 'w', encoding='utf-8') as f:
+                json.dump(report_data, f, indent=4)
+            logger.info(f"Saved extraction to {out_path}\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Process Annual Reports with Modal LLM")

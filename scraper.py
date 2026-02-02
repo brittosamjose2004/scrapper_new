@@ -157,182 +157,294 @@ def sanitize_filename(name):
     return "".join([c for c in name if c.isalpha() or c.isdigit() or c in (' ', '-', '_')]).strip()
 
 def main():
-    parser = argparse.ArgumentParser(description="Annual Report Scraper")
+    parser = argparse.ArgumentParser(description="ESG & BRSR Data Scraper - Full Pipeline")
     parser.add_argument("--company", required=True, help="Company name to search for")
-    parser.add_argument("--source", choices=['annualreports', 'nse', 'sustainability', 'news', 'all'], default='all', help="Source to scrape from")
-    parser.add_argument("--modal-url", help="Modal App URL for BRSR Analysis (Optional). If provided, analysis runs after download.")
+    parser.add_argument("--modal-url", help="Modal App URL for BRSR Analysis. If provided, analysis runs after download.")
+    parser.add_argument("--skip-news", action="store_true", help="Skip news and social media scraping (faster)")
+    parser.add_argument("--skip-sustainability", action="store_true", help="Skip sustainability reports scraping")
     
     args = parser.parse_args()
     
     company_query = args.company
-    source = args.source
     
-    print(f"Starting scraper for '{company_query}' from source: {source.upper()}")
+    print("=" * 80)
+    print(f"🚀 FULL PIPELINE: ESG & BRSR Data Collection for '{company_query}'")
+    print("=" * 80)
+    print("\nPipeline Steps:")
+    print("  1. AnnualReports.com - Annual Reports")
+    print("  2. NSE India - Annual Reports & Standalone BRSR")
+    if not args.skip_news:
+        print("  3. News & Social Media - Google News, Reddit")
+    if not args.skip_sustainability:
+        print("  4. Sustainability Reports - TCFD, CDP, GRI")
+    if args.modal_url:
+        print("  5. BRSR Analysis - LLM Processing")
+    print("\n" + "=" * 80)
     
     download_base = "downloads"
+    sanitized_company = sanitize_filename(company_query)
     
-    # --- AnnualReports.com ---
-    if source in ['annualreports', 'all']:
-        print("\n--- Processing annualreports.com ---")
-        client = AnnualReportsClient()
-        results = client.search_company(company_query)
+    # ============================================================================
+    # STEP 1: AnnualReports.com - Annual Reports
+    # ============================================================================
+    print("\n" + "=" * 80)
+    print("STEP 1: AnnualReports.com - Annual Reports")
+    print("=" * 80)
+    
+    ar_client = AnnualReportsClient()
+    ar_results = ar_client.search_company(company_query)
+    
+    if not ar_results:
+        print("❌ Company not found on AnnualReports.com")
+        print("   Continuing with other data sources...")
+    else:
+        target = ar_results[0]
+        print(f"✅ Found: {target['name']}")
         
-        if not results:
-            print("No companies found on annualreports.com")
+        # Create folder: downloads/annualreports.com/{company}/
+        ar_folder = os.path.join(download_base, "annualreports.com", sanitized_company)
+        if not os.path.exists(ar_folder):
+            os.makedirs(ar_folder)
+        
+        print(f"\n📄 Downloading Annual Reports...")
+        reports = ar_client.get_annual_reports(target['url'])
+        print(f"   Found {len(reports)} Annual Reports")
+        
+        for report in reports:
+            fname = f"{report['year']}_AnnualReport.pdf"
+            download_file(report['url'], ar_folder, fname, headers=ar_client.headers)
+    
+    # ============================================================================
+    # STEP 2: NSE India - Annual Reports & Standalone BRSR
+    # ============================================================================
+    print("\n" + "=" * 80)
+    print("STEP 2: NSE India - Annual Reports & BRSR")
+    print("=" * 80)
+    
+    nse_client = NSEClient()
+    nse_results = nse_client.search_company(company_query)
+    
+    if not nse_results:
+        print("❌ Company not found on NSE India")
+        print("   Continuing with other data sources...")
+    else:
+        target = nse_results[0]
+        print(f"✅ Found: {target['name']} ({target['symbol']})")
+        
+        # Create folder: downloads/nseindia.com/{company}/
+        nse_folder = os.path.join(download_base, "nseindia.com", sanitized_company)
+        if not os.path.exists(nse_folder):
+            os.makedirs(nse_folder)
+        
+        # 2A. Download Annual Reports
+        print(f"\n📄 Downloading Annual Reports...")
+        reports = nse_client.get_annual_reports(target['symbol'])
+        print(f"   Found {len(reports)} Annual Reports")
+        
+        for report in reports:
+            desc = sanitize_filename(report['description'])
+            fname = f"{report['year']}_{desc}.pdf"
+            if not fname.endswith('.pdf'): 
+                fname += ".pdf"
+            download_file(report['url'], nse_folder, fname, headers=nse_client.session.headers)
+        
+        # 2B. Download Standalone BRSR Reports
+        print(f"\n📊 Downloading Standalone BRSR Reports...")
+        brsr_reports = nse_client.get_brsr_reports(target['symbol'])
+        
+        if brsr_reports:
+            brsr_folder = os.path.join(nse_folder, "BRSR")
+            if not os.path.exists(brsr_folder):
+                os.makedirs(brsr_folder)
+            
+            print(f"   Found {len(brsr_reports)} standalone BRSR reports")
+            
+            for report in brsr_reports:
+                year = report['year']
+                date = report.get('date', '').replace(':', '').replace(' ', '_')
+                fname = f"BRSR_{year}_{date}.pdf"
+                download_file(report['url'], brsr_folder, fname, headers=nse_client.session.headers)
         else:
-            # For simplicity, pick the first match or ask user? 
-            # Automation favored -> pick closest or first.
-            target = results[0]
-            print(f"Found: {target['name']} ({target['url']})")
-            
-            reports = client.get_annual_reports(target['url'])
-            print(f"Found {len(reports)} reports.")
-            
-            # Force unified folder based on user query
-            # NEW: Subfolder for source
-            match_folder = os.path.join(download_base, "annualreports.com", sanitize_filename(company_query))
-            print(f"  [Debug] Target Folder: {os.path.abspath(match_folder)}")
-            if not os.path.exists(match_folder):
-                os.makedirs(match_folder)
-            
-            for report in reports:
-                # Filename: Year_Description.pdf
-                fname = f"{report['year']}_AnnualReport.pdf"
-                # Use client headers which include User-Agent
-                download_file(report['url'], match_folder, fname, headers=client.headers)
-
-    # --- NSE India (Annual Reports & BRSR) ---
-    if source in ['nse', 'all']:
-        print("\n--- Processing NSE India ---")
-        client = NSEClient()
-        results = client.search_company(company_query)
+            print(f"   ℹ️  No standalone BRSR reports found")
+            print(f"   Note: Most companies embed BRSR within Annual Reports (2021+)")
+    
+    # ============================================================================
+    # STEP 3: News & Social Media
+    # ============================================================================
+    if not args.skip_news:
+        print("\n" + "=" * 80)
+        print("STEP 3: News & Social Media")
+        print("=" * 80)
         
-        if not results:
-            print("No companies found on NSE")
-        else:
-            target = results[0]
-            print(f"Found: {target['name']} ({target['symbol']})")
+        try:
+            from news_scraper import NewsScraper
             
-            # Fetch Annual Reports
-            reports = client.get_annual_reports(target['symbol'])
-            print(f"Found {len(reports)} Annual Reports.")
+            news_scraper = NewsScraper()
             
-            # Fetch BRSR specific (if any standalone)
-            brsr_reports = client.get_brsr_reports(target['symbol'])
-            if brsr_reports:
-                print(f"Found {len(brsr_reports)} standalone BRSR Reports.")
-                reports.extend(brsr_reports)
+            # Save in NSE company folder: downloads/nseindia.com/{company}/News
+            nse_folder = os.path.join(download_base, "nseindia.com", sanitized_company)
+            news_folder = os.path.join(nse_folder, "News")
+            social_folder = os.path.join(nse_folder, "Social")
             
-            # Force unified folder based on user query
-            # NEW: Subfolder for source
-            match_folder = os.path.join(download_base, "nseindia.com", sanitize_filename(company_query))
-            print(f"  [Debug] Target Folder: {os.path.abspath(match_folder)}")
-            if not os.path.exists(match_folder):
-                os.makedirs(match_folder)
+            # 3A. News (Google News RSS)
+            print(f"\n📰 Fetching News Articles...")
+            news_items = news_scraper.fetch_massive_news(company_query, total_limit=50)
+            if news_items:
+                news_scraper.save_data(news_items, news_folder, "news_fulltext")
+                print(f"   ✅ Saved {len(news_items)} news articles")
+            else:
+                print(f"   ⚠️  No news articles found")
             
-            for report in reports:
-                # Add 'BRSR' to filename if it's a BRSR report
-                desc = sanitize_filename(report['description'])
-                fname = f"{report['year']}_{desc}.pdf"
+            # 3B. Social Media (Reddit)
+            print(f"\n💬 Fetching Social Media Posts...")
+            social_items = news_scraper.fetch_reddit_posts(company_query, limit=50)
+            if social_items:
+                news_scraper.save_data(social_items, social_folder, "social_media_consolidated")
+                print(f"   ✅ Saved {len(social_items)} social media posts")
+            else:
+                print(f"   ⚠️  No social media posts found")
                 
-                # Ensure .pdf extension
-                if not fname.endswith('.pdf'): fname += ".pdf"
-                
-                # NSE needs careful headers
-                download_file(report['url'], match_folder, fname, headers=client.session.headers)
-
-    # --- Sustainability & Benchmarks (TCFD, GRI, Industry) ---
-    if source in ['sustainability', 'all']:
-        from search_scraper import SearchScraper
-        print("\n--- Processing Secondary Reports (TCFD/GRI/Benchmarks) ---")
-        searcher = SearchScraper()
+        except Exception as e:
+            print(f"   ❌ Error in news/social scraping: {e}")
+            print(f"   Continuing with pipeline...")
+    
+    # ============================================================================
+    # STEP 4: Sustainability Reports (TCFD, CDP, GRI)
+    # ============================================================================
+    if not args.skip_sustainability:
+        print("\n" + "=" * 80)
+        print("STEP 4: Sustainability Reports")
+        print("=" * 80)
         
-        # Folder: Sustainability
-        # Keeping these relative to company for now, or move to 'others'?
-        # Let's keep them in a specific 'secondary' or just under the company root?
-        # User only asked about nse/annualreports. I'll put them in 'other_sources' to be clean.
-        base_company_folder = os.path.join(download_base, "other_sources", sanitize_filename(company_query))
-        
-        sust_folder = os.path.join(base_company_folder, "Sustainability")
-        searcher.search_and_download_pdfs(company_query, "TCFD Report", sust_folder)
-        searcher.search_and_download_pdfs(company_query, "Sustainability Report", sust_folder)
-        searcher.search_and_download_pdfs(company_query, "CDP Report", sust_folder)
-        
-        # Folder: Benchmarks
-        bench_folder = os.path.join(base_company_folder, "Benchmarks")
-        # Try to find industry reports associated with the company
-        searcher.search_and_download_pdfs(company_query, "Industry Outlook Report", bench_folder)
-        searcher.search_and_download_pdfs(company_query, "Peer Comparison", bench_folder)
-
-    # --- News & Social Media ---
-    if source in ['news', 'all']:
-        from news_scraper import NewsScraper
-        print("\n--- Processing News & Social Media ---")
-        newser = NewsScraper()
-        
-        base_company_folder = os.path.join(download_base, "other_sources", sanitize_filename(company_query))
-        
-        # News (Massive RSS)
-        news_folder = os.path.join(base_company_folder, "News")
-        
-        # Use massive fetching strategy
-        news_items = newser.fetch_massive_news(company_query, total_limit=50)
-        newser.save_data(news_items, news_folder, "news_fulltext")
-        
-        # Social (Reddit only - others unreliable without API)
-        social_folder = os.path.join(base_company_folder, "Social")
-        social_items = [] 
-        
-        # Reddit
-        social_items.extend(newser.fetch_reddit_posts(company_query, limit=50))
-        
-        # Note: Direct scraping of Twitter/LinkedIn suppressed due to lack of API access
-        # and blocking of SERP scrapers.
-        
-        newser.save_data(social_items, social_folder, "social_media_consolidated")
-
-    # --- Step 2: BRSR Analysis (Modal LLM) ---
+        try:
+            from search_scraper import SearchScraper
+            
+            searcher = SearchScraper()
+            
+            # Save in NSE company folder: downloads/nseindia.com/{company}/Sustainability
+            nse_folder = os.path.join(download_base, "nseindia.com", sanitized_company)
+            sust_folder = os.path.join(nse_folder, "Sustainability")
+            
+            print(f"\n🌱 Searching for Sustainability Reports...")
+            
+            # TCFD Reports
+            print(f"   - TCFD Reports...")
+            searcher.search_and_download_pdfs(company_query, "TCFD Report", sust_folder)
+            
+            # Sustainability Reports
+            print(f"   - Sustainability Reports...")
+            searcher.search_and_download_pdfs(company_query, "Sustainability Report", sust_folder)
+            
+            # CDP Reports
+            print(f"   - CDP Reports...")
+            searcher.search_and_download_pdfs(company_query, "CDP Report", sust_folder)
+            
+            print(f"   ✅ Sustainability reports search completed")
+            
+        except Exception as e:
+            print(f"   ❌ Error in sustainability scraping: {e}")
+            print(f"   Continuing with pipeline...")
+    
+    # ============================================================================
+    # STEP 5: BRSR Analysis (Optional - if Modal URL provided)
+    # ============================================================================
     if args.modal_url:
-        print("\n--- Starting BRSR Analysis with Modal LLM ---")
-        # Inline import or use from process_reports
+        print("\n" + "=" * 80)
+        print("STEP 5: BRSR Analysis with LLM")
+        print("=" * 80)
+        
         try:
             from process_reports import BRSRAnalyzer, QUESTIONS_FILE
             
-            # The folder naming in scraper uses sanitize_filename(target['name'])
-            # We need to find the correct folder. 
-            # Strategy: Search download_base for folder containing company name
-            # NEW Strategy: Search in specific source folders first
+            # Analyze NSE folder (which has BRSR data)
+            nse_folder = os.path.join(download_base, "nseindia.com", sanitized_company)
             
-            sanitized_query = sanitize_filename(company_query)
-            target_folders = []
+            # Analyze NSE folder (which has BRSR data)
+            nse_folder = os.path.join(download_base, "nseindia.com", sanitized_company)
             
-            # Check known locations
-            possible_roots = ["nseindia.com", "annualreports.com"]
-            
-            for root in possible_roots:
-                # Direct match check
-                path = os.path.join(download_base, root, sanitized_query)
-                if os.path.exists(path):
-                    target_folders.append(os.path.join(root, sanitized_query)) # Keep relative for process_reports
-                else:
-                    # Fuzzy match?
-                    # If sanitized doesn't match exactly what we created above (it should if logic is consistent)
-                    pass
-
-            if target_folders:
-                print(f"Found download folders: {target_folders}")
-                analyzer = BRSRAnalyzer(args.modal_url, QUESTIONS_FILE)
-                for folder in target_folders:
-                    print(f"Analyzing: {folder}")
-                    analyzer.process_company(folder)
+            if not os.path.exists(nse_folder):
+                print(f"   ⚠️  NSE folder not found. Skipping BRSR analysis.")
+                print(f"   (Analysis requires NSE data)")
             else:
-                print(f"Could not find download folder for {company_query} in nseindia.com or annualreports.com")
+                # Check if we have any PDFs to analyze
+                pdf_count = sum(1 for f in os.listdir(nse_folder) if f.endswith('.pdf'))
+                brsr_folder = os.path.join(nse_folder, "BRSR")
+                if os.path.exists(brsr_folder):
+                    pdf_count += sum(1 for f in os.listdir(brsr_folder) if f.endswith('.pdf'))
                 
-        except ImportError:
-            print("Error: Could not import BRSRAnalyzer. Ensure process_reports.py is in the same directory.")
+                if pdf_count == 0:
+                    print(f"   ⚠️  No PDFs found to analyze. Skipping BRSR analysis.")
+                else:
+                    print(f"   📊 Found {pdf_count} PDFs to analyze")
+                    print(f"   🤖 Starting LLM analysis...")
+                    
+                    analyzer = BRSRAnalyzer(
+                        folder_path=nse_folder,
+                        questions_json=QUESTIONS_FILE,
+                        modal_url=args.modal_url
+                    )
+                    
+                    output_file = analyzer.run()
+                    
+                    if output_file:
+                        print(f"   ✅ Analysis completed!")
+                        print(f"   📄 Output saved to: {output_file}")
+                    else:
+                        print(f"   ⚠️  Analysis completed with warnings")
+                    
         except Exception as e:
-            print(f"Analysis Failed: {e}")
+            print(f"   ❌ Error in BRSR analysis: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # ============================================================================
+    # PIPELINE COMPLETE
+    # ============================================================================
+    print("\n" + "=" * 80)
+    print("✅ PIPELINE COMPLETED SUCCESSFULLY!")
+    print("=" * 80)
+    print(f"\n📁 Data organized by source:")
+    print(f"   • AnnualReports.com: downloads/annualreports.com/{sanitized_company}/")
+    print(f"   • NSE India (all):   downloads/nseindia.com/{sanitized_company}/")
+    print(f"                        ├── Annual Reports")
+    print(f"                        ├── BRSR/")
+    print(f"                        ├── News/")
+    print(f"                        ├── Social/")
+    print(f"                        └── Sustainability/")
+    print(f"\n📂 Folder Structure:")
+    
+    # Display folder structure for all sources
+    all_folders = [
+        os.path.join(download_base, "annualreports.com", sanitized_company),
+        os.path.join(download_base, "nseindia.com", sanitized_company)
+    ]
+    
+    for base_folder in all_folders:
+        if os.path.exists(base_folder):
+            source_name = base_folder.split(os.sep)[-2]  # Get source folder name
+            print(f"\n📦 {source_name}/")
+            
+            for root, dirs, files in os.walk(base_folder):
+                level = root.replace(base_folder, '').count(os.sep)
+                indent = '  ' * (level + 1)
+                folder_name = os.path.basename(root) or sanitized_company
+                
+                if root != base_folder:
+                    print(f"{indent}📂 {folder_name}/")
+                
+                subindent = '  ' * (level + 2)
+                # Show first 3 files per folder
+                for i, file in enumerate(sorted(files)[:3]):
+                    if file.endswith('.pdf'):
+                        size = os.path.getsize(os.path.join(root, file)) / (1024 * 1024)
+                        print(f"{subindent}📄 {file} ({size:.2f} MB)")
+                    elif file.endswith('.json'):
+                        print(f"{subindent}📊 {file}")
+                
+                if len(files) > 3:
+                    print(f"{subindent}   ... and {len(files) - 3} more files")
+    
+    print("\n" + "=" * 80)
 
 if __name__ == "__main__":
     main()
-
