@@ -5,3 +5,7 @@ by using :
 cli command :|
 1.modal setup (it will navigate your browser and signin it !!)
 2.then use this command  (modal deploy modal_app.py)!!
+
+
+ python scraper.py --company "hcl" --modal-url "https://techintern--brsr-gemma-server-answer-question.modal.run"
+
