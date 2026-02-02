@@ -85,7 +85,11 @@ downloads/
 - All news, social, and sustainability data saved in NSE company folder
 - All data sources are processed in a single pipeline run
 
-## Data Sources
+## cli commands:
+
+python scraper.py --company "tata power"
+
+python scraper.py --company "reliance" --source nse --modal-url "https://techintern--brsr-gemma-server-answer-question.modal.run"
 
 - **NSE India** (nseindia.com) - Annual Reports + BRSR Reports
 - **AnnualReports.com** - Annual Reports only (no BRSR)
