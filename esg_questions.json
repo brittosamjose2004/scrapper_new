@@ -1,0 +1,158 @@
+{
+    "environmental_performance": {
+        "resource_use": {
+            "questions": [
+                "Total Energy Consumption (MWh)",
+                "Energy Intensity (MWh per revenue/unit output)",
+                "Renewable Energy Share (%)",
+                "Total Water Withdrawal (m³)",
+                "Water Intensity (m³ per revenue/unit output)",
+                "Waste Recycled (%)"
+            ]
+        },
+        "climate_stewardship": {
+            "questions": [
+                "Scope 1 emissions (tCO₂e)",
+                "Scope 2 emissions (tCO₂e)",
+                "Scope 3 emissions (tCO₂e)",
+                "Scope 3 emissions coverage (% categories disclosed)",
+                "Emissions reduction vs baseline (%)",
+                "Carbon reduction target year (numeric gap to target)"
+            ]
+        },
+        "resource_footprint": {
+            "questions": [
+                "Total emissions intensity (tCO₂e / revenue)",
+                "Waste generated (tons)",
+                "Hazardous waste share (%)",
+                "Water discharge volume (m³)",
+                "Land use footprint (hectares or proxy)",
+                "Pollution incidents reported (count)"
+            ]
+        },
+        "aspiration_need": {
+            "questions": [
+                "ESG improvement rate over 3 years (%)",
+                "Green capex share (%)",
+                "R&D spend on sustainability (% revenue)",
+                "Net zero alignment score (proxy numeric)",
+                "Transition investment share (%)",
+                "Sustainability targets disclosed (count)"
+            ]
+        },
+        "growth_need": {
+            "questions": [
+                "Revenue growth rate (%)",
+                "Emissions growth rate (%)",
+                "Emissions vs revenue divergence ratio",
+                "Green revenue share (%)",
+                "Expansion projects in high-risk sectors (count)",
+                "Capex in carbon-intensive assets (%)"
+            ]
+        }
+    },
+    "social_performance": {
+        "human_capacity": {
+            "questions": [
+                "Employee turnover rate (%)",
+                "Training hours per employee",
+                "LTIFR (injury frequency rate)",
+                "Workforce diversity (% women or minority)",
+                "Employee engagement score",
+                "Fatal accidents (count)"
+            ]
+        },
+        "community_engagement": {
+            "questions": [
+                "CSR/community spending (% profit)",
+                "Community incidents reported (count)",
+                "Social investment projects (count)",
+                "Local employment share (%)",
+                "Community disputes/legal conflicts (count)",
+                "Community complaints resolved (%)"
+            ]
+        },
+        "customer_satisfaction": {
+            "questions": [
+                "Product recalls (count)",
+                "Customer complaint rate",
+                "Customer satisfaction index",
+                "Product safety incidents (count)",
+                "Warranty claims rate",
+                "Consumer litigation cases (count)"
+            ]
+        },
+        "quality_assurance": {
+            "questions": [
+                "Quality certifications coverage (% operations)",
+                "Product defect rate",
+                "Compliance violations (count)",
+                "Supply chain quality incidents (count)",
+                "Operational disruptions (count)",
+                "Quality audit pass rate (%)"
+            ]
+        },
+        "data_risk": {
+            "questions": [
+                "Data breaches reported (count)",
+                "Customers affected by breaches",
+                "Cybersecurity incidents (count)",
+                "Regulatory fines for data issues ($)",
+                "Privacy complaints filed (count)",
+                "Cybersecurity investments ($ or % revenue)"
+            ]
+        }
+    },
+    "governance_performance": {
+        "legal_compliance": {
+            "questions": [
+                "Active legal cases (count)",
+                "Regulatory fines ($)",
+                "Compliance violations (count)",
+                "Investigations ongoing (count)",
+                "Settlements paid ($)",
+                "Compliance audit success rate (%)"
+            ]
+        },
+        "board_performance": {
+            "questions": [
+                "Independent directors (%)",
+                "Female directors (%)",
+                "Board attendance (%)",
+                "Average director tenure (years)",
+                "ESG-linked executive pay (%)",
+                "Board diversity index"
+            ]
+        },
+        "executioner_risk": {
+            "questions": [
+                "Project delays (count)",
+                "Budget overruns (%)",
+                "ROIC trend (%) - return on invested capital",
+                "Capex execution efficiency (%)",
+                "Strategy revisions (count)",
+                "Delivery delays reported (count)"
+            ]
+        },
+        "competitor_risk": {
+            "questions": [
+                "Market share change (%)",
+                "Revenue growth vs sector (% difference)",
+                "ESG score gap vs leader",
+                "Emissions intensity vs peers",
+                "Margin vs sector average (% difference)",
+                "Innovation/R&D spend vs peers (%)"
+            ]
+        },
+        "financial_risk": {
+            "questions": [
+                "Debt-to-equity ratio",
+                "Interest coverage ratio",
+                "EBITDA margin (%)",
+                "Revenue volatility (%)",
+                "Credit rating score",
+                "Free cash flow trend (%)"
+            ]
+        }
+    }
+}
