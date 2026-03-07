@@ -171,8 +171,11 @@ def main():
     parser.add_argument("--skip-news", action="store_true", help="Skip news and social media scraping (faster)")
     parser.add_argument("--skip-sustainability", action="store_true", help="Skip sustainability reports scraping")
     parser.add_argument("--analyze", action="store_true", help="Run ESG analysis after scraping (answers ESG questions from scraped data)")
-    parser.add_argument("--llm", choices=["gemini", "ollama"], default="gemini", help="LLM backend for ESG analysis (default: gemini)")
-    parser.add_argument("--gemini-key", help="Google Gemini API key (or set GEMINI_API_KEY env var)")
+    parser.add_argument("--llm", default="gemini", help="LLM backend for ESG analysis: gemini|grok|openrouter|ollama|auto")
+    parser.add_argument("--llm-chain", default=None, help="Comma-separated failover chain: gemini,grok,openrouter,ollama")
+    parser.add_argument("--gemini-key", help="Google Gemini API key(s), comma-separated (or set GEMINI_API_KEY env var)")
+    parser.add_argument("--grok-key", help="xAI Grok API key(s), comma-separated (or set XAI_API_KEY env var)")
+    parser.add_argument("--openrouter-key", help="OpenRouter API key(s), comma-separated (or set OPENROUTER_API_KEY env var)")
     
     args = parser.parse_args()
     
@@ -389,7 +392,10 @@ def main():
                 company_name=company_query,
                 base_folder=download_base,
                 llm_type=args.llm,
-                gemini_key=args.gemini_key
+                gemini_key=args.gemini_key,
+                llm_chain=args.llm_chain,
+                grok_key=args.grok_key,
+                openrouter_key=args.openrouter_key,
             )
             
             if output_file:

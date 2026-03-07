@@ -19,6 +19,9 @@ modal deploy modal_app.py
 The scraper runs a complete pipeline collecting all data sources:
 
 ```bash
+# One-command end-to-end run (scrape + ESG analysis)
+python scraper.py --company "Reliance" --analyze --llm auto
+
 # Basic pipeline (NSE + News + Social + Sustainability)
 python scraper.py --company "Reliance"
 
