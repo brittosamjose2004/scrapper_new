@@ -176,6 +176,8 @@ def main():
     parser.add_argument("--gemini-key", help="Google Gemini API key(s), comma-separated (or set GEMINI_API_KEY env var)")
     parser.add_argument("--grok-key", help="xAI Grok API key(s), comma-separated (or set XAI_API_KEY env var)")
     parser.add_argument("--openrouter-key", help="OpenRouter API key(s), comma-separated (or set OPENROUTER_API_KEY env var)")
+    parser.add_argument("--year", type=int, default=None, help="Analyze a specific year only (e.g. --year 2023)")
+    parser.add_argument("--yearly", action="store_true", help="Generate a separate ESG JSON per available annual report year")
     
     args = parser.parse_args()
     
@@ -396,11 +398,18 @@ def main():
                 llm_chain=args.llm_chain,
                 grok_key=args.grok_key,
                 openrouter_key=args.openrouter_key,
+                year=args.year,
+                yearly=args.yearly,
             )
             
             if output_file:
-                print(f"   ✅ ESG Analysis completed!")
-                print(f"   📄 Output saved to: {output_file}")
+                if isinstance(output_file, list):
+                    print(f"   ✅ ESG Analysis completed! {len(output_file)} yearly reports saved:")
+                    for p in output_file:
+                        print(f"      📄 {p}")
+                else:
+                    print(f"   ✅ ESG Analysis completed!")
+                    print(f"   📄 Output saved to: {output_file}")
             else:
                 print(f"   ⚠️  ESG Analysis had issues. Check logs above.")
                 
